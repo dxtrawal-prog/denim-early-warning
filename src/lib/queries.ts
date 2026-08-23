@@ -187,6 +187,26 @@ export async function getDashboard(): Promise<DashboardData> {
     }
   }
 
+  // Last pipeline run: most recent ingested_at among live readings
+  const { data: lastRun } = await sb
+    .from('signal_readings')
+    .select('ingested_at')
+    .eq('data_quality', 'live')
+    .order('ingested_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let lastPipelineRun: DashboardData['lastPipelineRun'] = null;
+  if (lastRun?.ingested_at) {
+    const ts = lastRun.ingested_at;
+    const { data: countRows } = await sb
+      .from('signal_readings')
+      .select('source_id')
+      .eq('data_quality', 'live')
+      .eq('ingested_at', ts);
+    lastPipelineRun = { at: ts, sourcesUpdated: countRows?.length ?? 0 };
+  }
+
   const tiers = buildTierViews(sources, latest, scores);
   const hasRunScoring = Object.values(scores).some((s) => s !== null);
 
@@ -210,5 +230,6 @@ export async function getDashboard(): Promise<DashboardData> {
     policyShock: notices,
     hasRunScoring,
     manualSourcesNeeded,
+    lastPipelineRun,
   };
 }

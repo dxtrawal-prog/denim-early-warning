@@ -1,14 +1,25 @@
 import ReliabilityTag from '@/components/ReliabilityTag';
+import RunPipelineButton from '@/components/RunPipelineButton';
 import StaleBadge from '@/components/StaleBadge';
 import StatusBadge from '@/components/StatusBadge';
 import TierCard from '@/components/TierCard';
 import { getDashboard } from '@/lib/queries';
+import { revalidatePath } from 'next/cache';
 
 export const dynamic = 'force-dynamic';
 
 export default async function StatusPage() {
   const data = await getDashboard();
   const combined = data.combined;
+
+  async function triggerRefresh() {
+    'use server';
+    revalidatePath('/');
+  }
+
+  const lastRun = data.lastPipelineRun;
+  const lastRunTime = lastRun?.at ? new Date(lastRun.at) : null;
+  const lastRunAgo = lastRunTime ? formatAgo(lastRunTime) : null;
 
   return (
     <div className="stack">
@@ -35,6 +46,28 @@ export default async function StatusPage() {
           )}
         </div>
       </header>
+
+      <section className="panel pipeline-panel">
+        <div className="pipeline-top">
+          <div>
+            <h2>Data Pipeline</h2>
+            {lastRunTime ? (
+              <div className="muted last-run">
+                Last run: {lastRunTime.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                {' '}
+                {lastRunTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                {' '}({lastRunAgo}) — {lastRun!.sourcesUpdated} source{lastRun!.sourcesUpdated !== 1 ? 's' : ''} updated
+              </div>
+            ) : (
+              <div className="muted last-run">No pipeline runs yet</div>
+            )}
+          </div>
+          <RunPipelineButton
+            lastPipelineRunAt={lastRun?.at ?? null}
+            onRan={triggerRefresh}
+          />
+        </div>
+      </section>
 
       {data.policyShock.length > 0 && (
         <div className="banner shock">
@@ -106,4 +139,15 @@ export default async function StatusPage() {
       </section>
     </div>
   );
+}
+
+function formatAgo(d: Date): string {
+  const diffMs = Date.now() - d.getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
 }

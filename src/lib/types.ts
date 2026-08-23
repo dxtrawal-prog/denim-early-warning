@@ -135,6 +135,7 @@ export interface DashboardData {
   policyShock: PolicyNotice[];
   hasRunScoring: boolean;
   manualSourcesNeeded: { name: string; count: number }[];
+  lastPipelineRun: { at: string | null; sourcesUpdated: number } | null;
 }
 
 export interface TrendBand {
