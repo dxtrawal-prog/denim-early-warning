@@ -608,15 +608,156 @@ button.active {
   font-size: 14px;
 }
 
+/* ---- Scroll wrapper for tables on mobile ---- */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ---- Subscribe button ---- */
+.btn-subscribe {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-subscribe:hover:not(:disabled) {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+
+.btn-subscribe.subscribed {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: var(--green);
+  color: var(--green);
+}
+
+/* ---- Manual entry card ---- */
+.entry-card {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.entry-card .entry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.entry-card input[type="number"],
+.entry-card input[type="date"] {
+  min-height: 44px;
+}
+
+/* ---- Touch-friendly targets ---- */
+@media (pointer: coarse) {
+  button,
+  .nav-links a,
+  .btn-pipeline,
+  .btn-subscribe {
+    min-height: 44px;
+  }
+
+  .table td,
+  .table th {
+    padding: 12px 10px;
+  }
+}
+
+/* ---- Mobile responsive ---- */
 @media (max-width: 640px) {
   .nav-inner {
     flex-direction: column;
     gap: 8px;
   }
+
   .chart-grid {
     grid-template-columns: 1fr;
   }
+
   .hero-right {
     text-align: left;
+  }
+
+  .tier-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pipeline-top {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .pipeline-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .notice-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .page-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .hero-right {
+    text-align: left;
+  }
+
+  h1 {
+    font-size: 20px;
+  }
+
+  .container {
+    padding: 16px 12px 96px;
+  }
+
+  .range-picker {
+    flex-wrap: wrap;
+  }
+}
+
+/* ---- Very small screens (320px) ---- */
+@media (max-width: 360px) {
+  body {
+    font-size: 14px;
+  }
+
+  .badge {
+    font-size: 11px;
+    padding: 2px 8px;
+  }
+
+  .score {
+    font-size: 20px;
   }
 }

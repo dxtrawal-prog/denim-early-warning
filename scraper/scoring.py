@@ -26,6 +26,7 @@ import numpy as np
 import pandas as pd
 
 import db
+import notify
 
 Z_AMBER = 1.5
 Z_RED = 2.5
@@ -167,6 +168,7 @@ def detect_trigger(conn, today, tier, avg_z, status, detail):
             (today, str(tier), level, json.dumps(payload)),
         )
         print(f"  [trigger] tier {tier} -> {level.upper()} (z={avg_z:.2f})")
+        notify.send_alert(tier, level, avg_z, detail)
 
 
 def run_scoring(conn, today=None):
