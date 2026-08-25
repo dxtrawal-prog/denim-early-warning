@@ -32,6 +32,7 @@ class SourceConfig:
     expected_update_frequency_hours: int
     url: Optional[str] = None
     scraper: Optional[str] = None  # function name in the `scrapers` package
+    scraper_fallback: Optional[str] = None  # secondary scraper if primary fails
     is_calculated: bool = False
     notes: str = ""
     tags: list[str] = field(default_factory=list)
@@ -90,9 +91,12 @@ SOURCES: list[SourceConfig] = [
         name="Coarse yarn spot (Ne 6s-16s)",
         tier="2",
         unit="INR/kg",
-        scrape_reliability="manual",
+        scrape_reliability="fragile",
         expected_update_frequency_hours=24,
-        notes="No reliable public feed (YarnLIVE is subscription). Manual entry on /sources.",
+        url="https://admin.linnseed.com:8891/api/mobile/spot_price",
+        scraper="yarn_spot_coarse_linnseed",
+        scraper_fallback="yarn_spot_coarse_smartinfo",
+        notes="Linnseed JSON API (OE 10s/16s). Fallback: SmartInfoIndia PDFs (pass URL in notes). Manual entry on /sources.",
     ),
     SourceConfig(
         slug="pta_price",

@@ -11,3 +11,4 @@ from ._errors import ScrapeError  # noqa: F401
 from .cotton import cotton_spot_mcx, cotton_spot_cai
 from .commodity import brent_crude, cotton_futures_ice
 from .fx import usd_inr
+from .yarn_coarse import yarn_spot_coarse_linnseed, yarn_spot_coarse_smartinfo

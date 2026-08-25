@@ -31,8 +31,17 @@ def run_source(conn, ids, cfg):
         fn = getattr(mod, cfg.scraper)
         value = float(fn())
     except ScrapeError as e:
-        print(f"  [skip] {cfg.slug}: {e}")
-        return
+        # Try fallback scraper if primary fails
+        if cfg.scraper_fallback:
+            try:
+                fn2 = getattr(mod, cfg.scraper_fallback)
+                value = float(fn2())
+            except (ScrapeError, Exception) as e2:
+                print(f"  [skip] {cfg.slug}: primary failed ({e}), fallback failed ({e2})")
+                return
+        else:
+            print(f"  [skip] {cfg.slug}: {e}")
+            return
     except Exception as e:  # noqa: BLE001 - keep the pipeline alive
         print(f"  [skip] {cfg.slug}: unexpected error: {e!r}")
         return
