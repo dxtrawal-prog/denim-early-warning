@@ -22,6 +22,7 @@ export default async function StatusPage() {
   const lastRun = data.lastPipelineRun;
   const lastRunTime = lastRun?.at ? new Date(lastRun.at) : null;
   const lastRunAgo = lastRunTime ? formatAgo(lastRunTime) : null;
+  const canRunPipeline = !!process.env.SUPABASE_DB_URL;
 
   return (
     <div className="stack">
@@ -43,7 +44,7 @@ export default async function StatusPage() {
             <div className="muted">
               {data.hasRunScoring
                 ? 'No tiers scored yet.'
-                : 'Awaiting first daily pipeline run (see README: run scraper/run.py once).'}
+                : 'Awaiting first daily pipeline run.'}
             </div>
           )}
         </div>
@@ -64,10 +65,14 @@ export default async function StatusPage() {
               <div className="muted last-run">No pipeline runs yet</div>
             )}
           </div>
-          <RunPipelineButton
-            lastPipelineRunAt={lastRun?.at ?? null}
-            onRan={triggerRefresh}
-          />
+          {canRunPipeline ? (
+            <RunPipelineButton
+              lastPipelineRunAt={lastRun?.at ?? null}
+              onRan={triggerRefresh}
+            />
+          ) : (
+            <div className="muted">Runs daily via GitHub Actions (01:00 UTC)</div>
+          )}
         </div>
         <div style={{ marginTop: 12 }}>
           <SubscribeButton />
