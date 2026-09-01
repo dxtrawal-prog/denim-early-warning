@@ -8,7 +8,9 @@ sources_config.py via getattr(scrapers, "function_name").
 """
 
 from ._errors import ScrapeError  # noqa: F401
-from .cotton import cotton_spot_mcx, cotton_spot_cai
+from .chinapoly import china_meg_spot, china_pta_spot, china_psf_spot
 from .commodity import brent_crude, cotton_futures_ice
+from .cotton import cotton_spot_mcx, cotton_spot_cai
 from .fx import usd_inr
+from .wpi_india import wpi_chem_inorganic, wpi_chem_organic, wpi_dye, wpi_textiles_mf
 from .yarn_coarse import yarn_spot_coarse_linnseed, yarn_spot_coarse_smartinfo

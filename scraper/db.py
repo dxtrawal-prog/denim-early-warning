@@ -31,6 +31,10 @@ def upsert_sources(conn, sources):
             s.url,
             s.is_calculated,
             s.notes,
+            s.frequency,
+            s.region,
+            s.rolling_window,
+            s.rolling_min_periods,
         )
         for s in sources
     ]
@@ -40,7 +44,8 @@ def upsert_sources(conn, sources):
             """
             insert into public.signal_sources
               (slug, name, tier, unit, scrape_reliability,
-               expected_update_frequency_hours, url, is_calculated, notes)
+               expected_update_frequency_hours, url, is_calculated, notes,
+               frequency, region, rolling_window, rolling_min_periods)
             values %s
             on conflict (slug) do update set
               name = excluded.name,
@@ -50,7 +55,11 @@ def upsert_sources(conn, sources):
               expected_update_frequency_hours = excluded.expected_update_frequency_hours,
               url = excluded.url,
               is_calculated = excluded.is_calculated,
-              notes = excluded.notes
+              notes = excluded.notes,
+              frequency = excluded.frequency,
+              region = excluded.region,
+              rolling_window = excluded.rolling_window,
+              rolling_min_periods = excluded.rolling_min_periods
             """,
             rows,
         )

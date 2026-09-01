@@ -16,6 +16,8 @@ export default function SourceTable({
           <th>Source</th>
           <th>Tier</th>
           <th>Reliability</th>
+          <th>Freq</th>
+          <th>Region</th>
           <th>Unit</th>
           <th>Last reading</th>
           <th>Reading date</th>
@@ -32,6 +34,10 @@ export default function SourceTable({
             <td>
               <ReliabilityTag r={s.scrape_reliability} />
             </td>
+            <td>
+              <span className="tag tag-freq">{s.frequency ?? 'daily'}</span>
+            </td>
+            <td>{s.region ?? 'india'}</td>
             <td>{s.unit}</td>
             <td>
               {s.latest_reading ? (

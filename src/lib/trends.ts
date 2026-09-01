@@ -1,6 +1,12 @@
+import { FREQUENCY_CONFIG } from './constants';
 import { getSupabase } from './supabase';
-import type { Source, TrendSeries } from './types';
+import type { Frequency, Source, TrendSeries } from './types';
 import { computeZSeries, latestZ } from './zscore';
+
+function computeWindow(s: Source): number {
+  const f = (s.frequency as Frequency) ?? 'daily';
+  return s.rolling_window ?? FREQUENCY_CONFIG[f].window;
+}
 
 /**
  * Per-signal daily % change series with the rolling band stats (current
@@ -21,14 +27,23 @@ export async function getTrends(rangeDays: number): Promise<TrendSeries[]> {
 
     const { data: readings } = await sb
       .from('signal_readings')
-      .select('date,value')
+      .select('date,value,data_quality')
       .eq('source_id', s.id)
-      .in('data_quality', ['live', 'manual'])
+      .in('data_quality', ['live', 'manual', 'synthetic_seed'])
       .order('date', { ascending: true });
     if (!readings || readings.length < 2) continue;
+    const hasSyntheticHistory = readings.some((r) => r.data_quality === 'synthetic_seed');
 
     const useAbsolute = s.slug === 'yarn_cotton_spread';
-    const zs = computeZSeries(readings.map((r) => ({ date: r.date, value: Number(r.value) })), useAbsolute);
+    const zs = computeZSeries(
+      readings.map((r) => ({ date: r.date, value: Number(r.value) })),
+      useAbsolute,
+      {
+        frequency: (s.frequency as 'daily' | 'weekly' | 'monthly') ?? 'daily',
+        window: s.rolling_window,
+        minPeriods: s.rolling_min_periods,
+      },
+    );
     const withPct = zs.filter((p) => p.pct_change !== null);
     const points = withPct
       .filter((p) => p.date >= cutoffIso)
@@ -50,6 +65,9 @@ export async function getTrends(rangeDays: number): Promise<TrendSeries[]> {
       unit: s.unit,
       tier: s.tier,
       reliability: s.scrape_reliability,
+      frequency: (s.frequency as 'daily' | 'weekly' | 'monthly') ?? 'daily',
+      window: computeWindow(s),
+      hasSyntheticHistory,
       points,
       band,
       last: withPct.length ? { date: withPct[withPct.length - 1].date, value: withPct[withPct.length - 1].value } : null,

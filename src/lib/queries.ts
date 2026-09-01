@@ -25,7 +25,7 @@ function num(v: unknown): number | null {
 }
 
 async function fetchLatestReadings(): Promise<ReadingV[]> {
-  const { data, error } = await getSupabase().from('v_latest_readings').select('id,source_id,slug,name,tier,unit,scrape_reliability,expected_update_frequency_hours,is_calculated,last_scrape_at,date,value,ingested_at,data_quality,is_stale');
+  const { data, error } = await getSupabase().from('v_latest_readings').select('id,source_id,slug,name,tier,unit,scrape_reliability,expected_update_frequency_hours,frequency,region,rolling_window,rolling_min_periods,is_calculated,last_scrape_at,date,value,ingested_at,data_quality,is_stale');
   if (error) throw new Error(`Failed to load latest readings: ${error.message}`);
   return (data ?? []) as ReadingV[];
 }

@@ -10,19 +10,21 @@ import db
 
 CANDY_KG = 355.62
 
-# Priority: test_injection > synthetic_seed > manual > live
-_QUALITY_RANK = {"test_injection": 3, "synthetic_seed": 2, "manual": 1, "live": 0}
+# Trust rank: higher = more trustworthy. Real live data outranks manual; manual
+# outranks test_injection; synthetic_seed is a warm-start placeholder and is the
+# LEAST trusted. Derived products carry the least-trusted quality of their inputs
+# so a synthetic-only spread is never mistaken for a real one.
+_QUALITY_RANK = {"live": 3, "manual": 2, "test_injection": 1, "synthetic_seed": 0}
 
 
 def _derive_quality(a: str, b: str) -> str:
-    """Return the 'worst' data_quality of two inputs."""
-    rank_a = _QUALITY_RANK.get(a, 0)
-    rank_b = _QUALITY_RANK.get(b, 0)
-    best = max(rank_a, rank_b)
-    for label, r in _QUALITY_RANK.items():
-        if r == best:
-            return label
-    return "live"
+    """Return the least-trusted data_quality of two inputs."""
+    def rank(q: str) -> int:
+        return _QUALITY_RANK.get(q, 0)
+
+    if rank(a) <= rank(b):
+        return a
+    return b
 
 
 def compute_yarn_cotton_spread(conn) -> None:

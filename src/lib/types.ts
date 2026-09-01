@@ -3,6 +3,8 @@ export type Reliability = 'stable' | 'fragile' | 'manual';
 export type Status = 'green' | 'amber' | 'red';
 export type TriggerLevel = 'amber' | 'red';
 export type DataQuality = 'live' | 'manual' | 'synthetic_seed' | 'test_injection';
+export type Frequency = 'daily' | 'weekly' | 'monthly';
+export type Region = 'india' | 'china' | 'global';
 
 export interface Source {
   id: number;
@@ -15,6 +17,10 @@ export interface Source {
   url: string | null;
   is_calculated: boolean;
   notes: string | null;
+  frequency: Frequency;
+  region: Region;
+  rolling_window: number | null;
+  rolling_min_periods: number | null;
   last_scrape_at: string | null;
   created_at: string;
 }
@@ -39,6 +45,10 @@ export interface ReadingV {
   unit: string;
   scrape_reliability: Reliability;
   expected_update_frequency_hours: number;
+  frequency: Frequency;
+  region: Region;
+  rolling_window: number | null;
+  rolling_min_periods: number | null;
   is_calculated: boolean;
   last_scrape_at: string | null;
   date: string;
@@ -158,6 +168,9 @@ export interface TrendSeries {
   unit: string;
   tier: string;
   reliability: Reliability;
+  frequency: Frequency;
+  window: number;
+  hasSyntheticHistory: boolean;
   points: TrendPoint[];
   band: TrendBand;
   last: { date: string; value: number } | null;

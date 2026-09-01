@@ -111,6 +111,42 @@ export default function SourcesPage() {
 
       {msg && <div className={`banner ${msg.type}`}>{msg.text}</div>}
 
+      {sources.length > 0 && (() => {
+        const scored = sources.filter((s) => s.tier !== 'overlay');
+        const auto = scored.filter((s) => !s.is_calculated && s.scrape_reliability !== 'manual');
+        const manual = scored.filter((s) => !s.is_calculated && s.scrape_reliability === 'manual');
+        const derived = scored.filter((s) => s.is_calculated);
+        const stale = sources.filter((s) => s.latest_reading?.is_stale);
+        const staleTier = stale.filter((s) => s.tier !== 'overlay').length;
+        return (
+          <div className="panel">
+            <h2>Data availability</h2>
+            <div className="avail-grid">
+              <div>
+                <strong>{auto.length}</strong> auto-scraped
+                <span className="muted"> (stable + fragile, incl. China proxies)</span>
+              </div>
+              <div>
+                <strong>{manual.length}</strong> manual-only
+                <span className="muted"> — no free public feed; enter on this page</span>
+              </div>
+              <div>
+                <strong>{derived.length}</strong> derived
+                <span className="muted"> — computed by the pipeline</span>
+              </div>
+              <div className={staleTier > 0 ? 'warn' : ''}>
+                <strong>{staleTier}</strong> stale tier signals
+                <span className="muted"> — check the <em>Last scrape</em> column</span>
+              </div>
+            </div>
+            <p className="muted" style={{ marginTop: 10 }}>
+              Manual signals above remain for inputs with no reliable public feed ({scored.filter((s) => s.scrape_reliability === 'manual' && !s.is_calculated).map((s) => s.name).join(', ')}).
+              China PTA/MEG/PSF now auto-scrape daily as directional proxies; India WPI (monthly) needs a free data.gov.in key to auto-update.
+            </p>
+          </div>
+        );
+      })()}
+
       <div className="panel">
         <h2>All signal sources</h2>
         <SourceTable sources={sources} showLastScrape />

@@ -15,12 +15,19 @@ import type { TrendSeries } from '@/lib/types';
 
 const fmt = (n: number | null | undefined) => (n == null ? '' : n.toFixed(2));
 
+const PERIOD_LABEL: Record<string, string> = {
+  daily: 'daily % change',
+  weekly: 'weekly % change',
+  monthly: 'monthly % change',
+};
+
 export default function SignalChart({ series }: { series: TrendSeries }) {
   const data = series.points;
   if (!data.length) return null;
 
   const maxAbs = Math.max(...data.map((d) => Math.abs(d.pct_change))) * 1.15;
   const b = series.band;
+  const periodLabel = PERIOD_LABEL[series.frequency] ?? 'daily % change';
 
   return (
     <div className="panel chart-panel">
@@ -29,7 +36,8 @@ export default function SignalChart({ series }: { series: TrendSeries }) {
           {series.name} <span className="muted">({series.unit})</span>
         </h3>
         <span className="muted">
-          Tier {series.tier} · daily % change
+          Tier {series.tier} · {series.frequency} · {periodLabel}
+          {series.hasSyntheticHistory ? ' · warm-start (synthetic history)' : ''}
           {series.last ? ` · last ${series.last.value} ${series.unit} on ${series.last.date}` : ''}
         </span>
       </div>
@@ -64,7 +72,7 @@ export default function SignalChart({ series }: { series: TrendSeries }) {
       <div className="legend-row">
         <span className="legend red">red zone (|z| &ge; 2.5)</span>
         <span className="legend amber">amber zone (1.5 &le; |z| &lt; 2.5)</span>
-        <span className="legend blue">90d rolling mean</span>
+        <span className="legend blue">{series.window}-period rolling mean</span>
       </div>
     </div>
   );

@@ -2,9 +2,10 @@
 Rule-based scoring (Phase 1 — no ML / no regression weight tuning).
 
 For every Tier 1/2/3 signal:
-  1. compute a rolling 90-day mean/std of daily % change (min 30 obs),
+  1. compute a rolling mean/std of daily % change over that signal's own window
+     (daily 90d / min 30 obs, weekly 52 / min 12, monthly 24 / min 6),
   2. today's z-score = (today's % change - rolling mean) / rolling std,
-  3. aggregate signal z-scores within a tier (simple average),
+  3. aggregate signal z-scores within a tier (simple average of normalized z),
   4. map the tier average to green/amber/red:
          green  |z| < 1.5
          amber  1.5 <= |z| < 2.5
@@ -14,6 +15,11 @@ For every Tier 1/2/3 signal:
 
 Weights (35/45/20) are used ONLY by the dashboard's combined "market pressure"
 score, never to weight the per-tier statuses.
+
+Signals are grouped by frequency; each uses `rolling_window` / `rolling_min_periods`
+from the source catalog (falls back to per-frequency defaults). This lets daily
+China-proxy and monthly India-WPI signals coexist in one screen without the
+monthly series being starved of a baseline.
 
 Note: pandas std uses ddof=0 (population) here to match the TypeScript rolling
 z-score used by the /trends charts.
@@ -30,8 +36,13 @@ import notify
 
 Z_AMBER = 1.5
 Z_RED = 2.5
-WINDOW = 90
-MIN_PERIODS = 30
+
+# Per-frequency rolling defaults (days or months) and min observations.
+FREQUENCY_DEFAULTS = {
+    "daily": {"window": 90, "min_periods": 30},
+    "weekly": {"window": 52, "min_periods": 12},
+    "monthly": {"window": 24, "min_periods": 6},
+}
 
 TIER_WEIGHTS = {"1": 0.35, "2": 0.45, "3": 0.20}
 
@@ -45,19 +56,33 @@ def status_for_z(z: float) -> str:
     return "green"
 
 
+def window_for_source(row) -> tuple[int, int]:
+    """Return (window, min_periods) for a signal, honoring per-source overrides."""
+    freq = row.get("frequency", "daily")
+    defaults = FREQUENCY_DEFAULTS.get(freq, FREQUENCY_DEFAULTS["daily"])
+    window = row.get("rolling_window") or defaults["window"]
+    min_periods = row.get("rolling_min_periods") or defaults["min_periods"]
+    return int(window), int(min_periods)
+
+
 def load_readings(conn) -> pd.DataFrame:
     df = db.read_sql(
         conn,
         """
-        select r.source_id, s.slug, s.name, s.tier, s.unit, r.date, r.value
+        select r.source_id, s.slug, s.name, s.tier, s.unit,
+               s.frequency, s.rolling_window, s.rolling_min_periods,
+               r.date, r.value, r.data_quality
         from public.signal_readings r
         join public.signal_sources s on s.id = r.source_id
         where s.tier in ('1', '2', '3')
-          and r.data_quality in ('live', 'manual')
+          and r.data_quality in ('live', 'manual', 'synthetic_seed')
         order by r.source_id, r.date
         """,
     )
     df["value"] = df["value"].astype(float)
+    if df.empty:
+        return df
+    df["frequency"] = df["frequency"].fillna("daily")
     return df
 
 
@@ -70,9 +95,21 @@ def compute_signal_zs(df: pd.DataFrame) -> pd.DataFrame:
         return group["value"].pct_change() * 100.0
 
     df["pct"] = df.groupby("source_id").apply(_day_change, include_groups=False).reset_index(level=0, drop=True)
-    g = df.groupby("source_id")["pct"]
-    df["mean"] = g.transform(lambda s: s.rolling(WINDOW, min_periods=MIN_PERIODS).mean())
-    df["std"] = g.transform(lambda s: s.rolling(WINDOW, min_periods=MIN_PERIODS).std(ddof=0))
+
+    window_info = df.groupby("source_id").apply(
+        lambda g: window_for_source(g.iloc[0]), include_groups=False
+    )
+
+    def _rolling_stats(group):
+        sid = group.name
+        window, min_periods = window_info[sid]
+        mean = group["pct"].rolling(window, min_periods=min_periods).mean()
+        std = group["pct"].rolling(window, min_periods=min_periods).std(ddof=0)
+        return pd.DataFrame({"mean": mean, "std": std})
+
+    stats = df.groupby("source_id", group_keys=False).apply(_rolling_stats)
+    df["mean"] = stats["mean"].reset_index(drop=True)
+    df["std"] = stats["std"].reset_index(drop=True)
     df["z"] = np.where(
         df["std"].isna() | df["pct"].isna() | (df["std"] == 0),
         np.nan,
@@ -102,6 +139,7 @@ def build_detail(rows: list[pd.Series]) -> list[dict]:
             "date": str(r["date"]),
             "pct_change": float(r["pct"]) if pd.notna(r["pct"]) else None,
             "z": float(r["z"]),
+            "data_quality": str(r["data_quality"]),
         }
         for r in rows
     ]
@@ -125,9 +163,16 @@ def upsert_tier_score(conn, today, tier, avg_z, status, detail):
         )
 
 
-def detect_trigger(conn, today, tier, avg_z, status, detail):
-    """Log a trigger when a tier crosses into amber/red (not on repeats)."""
+def detect_trigger(conn, today, tier, avg_z, status, detail, armed=True):
+    """Log a trigger when a tier crosses into amber/red (not on repeats).
+
+    `armed=False` means the tier's latest readings are still synthetic warm-start
+    placeholders — we compute & store the score but never fire a real alert (or
+    push notification) off fabricated history alone.
+    """
     if status == "green":
+        return
+    if not armed:
         return
     with conn.cursor() as cur:
         cur.execute(
@@ -175,7 +220,7 @@ def run_scoring(conn, today=None):
     today = today or date.today().isoformat()
     df = load_readings(conn)
     if df.empty:
-        print("scoring: no live/manual readings yet, skipping")
+        print("scoring: no readings yet, skipping")
         return
 
     df = compute_signal_zs(df)
@@ -190,19 +235,27 @@ def run_scoring(conn, today=None):
         if tier_with_z.empty:
             total_readings = len(tier_df)
             sources_in_tier = tier_df["slug"].nunique()
+            need = {
+                s: window_for_source(row)
+                for s, row in tier_df.drop_duplicates("source_id").iterrows()
+            }
             print(
                 f"scoring: tier {tier}: no z-scores yet "
-                f"({total_readings} total readings across {sources_in_tier} sources, "
-                f"need {MIN_PERIODS}+ per signal)"
+                f"({total_readings} total readings across {sources_in_tier} sources. "
+                f"Needs per-signal: { {k: need[k] for k in need} })"
             )
             continue
 
         latest = tier_with_z.sort_values("date").groupby("source_id").tail(1)
         avg_z = float(np.mean([latest["z"]]))
         status = status_for_z(avg_z)
-        detail = build_detail(list(latest.itertuples()))
+        detail = build_detail([latest.loc[i] for i in latest.index])
+        # A tier is "armed" for real alerts only when its latest contributing
+        # reading is real (live/manual), not a synthetic warm-start placeholder.
+        armed = (latest["data_quality"].isin(["live", "manual"])).any()
         upsert_tier_score(conn, today, tier, avg_z, status, detail)
-        detect_trigger(conn, today, tier, avg_z, status, detail)
-        print(f"scoring: tier {tier}: z={avg_z:.3f} status={status.upper()} signals={len(detail)}")
+        detect_trigger(conn, today, tier, avg_z, status, detail, armed=armed)
+        arm_note = "" if armed else " [warm-start: alerts disarmed, latest still synthetic]"
+        print(f"scoring: tier {tier}: z={avg_z:.3f} status={status.upper()} signals={len(detail)}{arm_note}")
 
     conn.commit()

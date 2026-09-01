@@ -29,13 +29,25 @@ def run_source(conn, ids, cfg):
     try:
         mod = importlib.import_module("scrapers")
         fn = getattr(mod, cfg.scraper)
-        value = float(fn())
+        result = fn()
+        # Monthly (and other periodic) scrapers may return (reference_date, value)
+        # so the reading is dated at its reference period, not today.
+        if isinstance(result, tuple):
+            reading_date, value = result
+            value = float(value)
+        else:
+            reading_date, value = date.today().isoformat(), float(result)
     except ScrapeError as e:
         # Try fallback scraper if primary fails
         if cfg.scraper_fallback:
             try:
                 fn2 = getattr(mod, cfg.scraper_fallback)
-                value = float(fn2())
+                result = fn2()
+                if isinstance(result, tuple):
+                    reading_date, value = result
+                    value = float(value)
+                else:
+                    reading_date, value = date.today().isoformat(), float(result)
             except (ScrapeError, Exception) as e2:
                 print(f"  [skip] {cfg.slug}: primary failed ({e}), fallback failed ({e2})")
                 return
@@ -51,8 +63,8 @@ def run_source(conn, ids, cfg):
         print(f"  [skip] {cfg.slug}: source missing from DB (apply migration first)")
         return
 
-    db.upsert_reading(conn, source_id, date.today().isoformat(), value, touch_last_scrape=True)
-    print(f"  [ok] {cfg.slug}: {value} {cfg.unit} ({cfg.scrape_reliability})")
+    db.upsert_reading(conn, source_id, reading_date, value, touch_last_scrape=True)
+    print(f"  [ok] {cfg.slug}: {value} {cfg.unit} @ {reading_date} ({cfg.scrape_reliability})")
 
 
 def main():

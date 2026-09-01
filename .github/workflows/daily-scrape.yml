@@ -31,4 +31,7 @@ jobs:
           # a postgresql:// connection string from the Supabase dashboard
           # (Database > Connect > Connection string > pooler, port 6543).
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          # Optional: free data.gov.in API key for the monthly India WPI sources.
+          DATA_GOV_IN_API_KEY: ${{ secrets.DATA_GOV_IN_API_KEY }}
+          DATA_GOV_IN_WPI_RESOURCE_ID: ${{ secrets.DATA_GOV_IN_WPI_RESOURCE_ID }}
         run: python scraper/run.py

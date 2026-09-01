@@ -1,4 +1,6 @@
-import { ROLLING_MIN_PERIODS, ROLLING_WINDOW } from './constants';
+import { FREQUENCY_CONFIG } from './constants';
+
+export type Frequency = 'daily' | 'weekly' | 'monthly';
 
 export interface ZPoint {
   date: string;
@@ -9,14 +11,43 @@ export interface ZPoint {
   z: number | null;
 }
 
+interface ZParams {
+  /** Signal frequency — drives rolling window + min observations. Defaults to daily. */
+  frequency?: Frequency;
+  /** Optional explicit overrides (per-source values from the catalog). */
+  window?: number | null;
+  minPeriods?: number | null;
+}
+
 /**
- * Rolling z-score of daily % change over a 90-day window (min 30 obs).
+ * Rolling z-score of % change over a per-frequency window
+ * (daily 90 / min 30, weekly 52 / min 12, monthly 24 / min 6).
  * Uses population std (ddof=0) to stay consistent with the Python scorer.
  * For metrics that cross zero (like yarn_cotton_spread), use absolute
  * day-over-day change instead of percentage change.
  */
 export function computeZSeries(
   sorted: { date: string; value: number }[],
+  useAbsoluteChange = false,
+  params: ZParams = {},
+): ZPoint[] {
+  const cfg = FREQUENCY_CONFIG[params.frequency ?? 'daily'];
+  const window = params.window ? Number(params.window) : cfg.window;
+  const minPeriods = params.minPeriods != null ? Number(params.minPeriods) : cfg.minPeriods;
+
+  return computeZSeriesCustom(
+    sorted,
+    window,
+    minPeriods,
+    useAbsoluteChange,
+  );
+}
+
+/** Core implementation with explicit window/minPeriods (also used for tests). */
+export function computeZSeriesCustom(
+  sorted: { date: string; value: number }[],
+  window: number,
+  minPeriods: number,
   useAbsoluteChange = false,
 ): ZPoint[] {
   const pct = sorted.map((p, i) => {
@@ -31,12 +62,12 @@ export function computeZSeries(
   });
 
   return pct.map((p, i) => {
-    const start = Math.max(0, i - ROLLING_WINDOW + 1);
+    const start = Math.max(0, i - window + 1);
     const slice = pct
       .slice(start, i)
       .map((x) => x.pct)
       .filter((x): x is number => x !== null);
-    if (slice.length < ROLLING_MIN_PERIODS || p.pct === null) {
+    if (slice.length < minPeriods || p.pct === null) {
       return { date: p.date, value: p.value, pct_change: p.pct, mean: null, sd: null, z: null };
     }
     const mean = slice.reduce((a, b) => a + b, 0) / slice.length;
