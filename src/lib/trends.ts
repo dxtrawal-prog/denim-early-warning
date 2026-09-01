@@ -8,6 +8,19 @@ function computeWindow(s: Source): number {
   return s.rolling_window ?? FREQUENCY_CONFIG[f].window;
 }
 
+/** Fetch start date: the displayed range plus the per-frequency rolling window,
+ *  so both the visible points and the z-band baseline are computed in full.
+ *  (Also keeps the query under PostgREST's 1000-row cap for 4y dailies.) */
+function fetchStartIso(rangeDays: number, s: Source): string {
+  const f = (s.frequency as Frequency) ?? 'daily';
+  const periodDays = f === 'monthly' ? 31 : f === 'weekly' ? 7 : 1;
+  const window = s.rolling_window ?? FREQUENCY_CONFIG[f].window;
+  const backDays = rangeDays + window * periodDays + 5;
+  const d = new Date();
+  d.setDate(d.getDate() - backDays);
+  return d.toISOString().slice(0, 10);
+}
+
 /**
  * Per-signal daily % change series with the rolling band stats (current
  * window mean/std) used to draw the amber/red threshold bands on /trends.
@@ -25,12 +38,18 @@ export async function getTrends(rangeDays: number): Promise<TrendSeries[]> {
   for (const s of sources as Source[]) {
     if (s.tier === 'overlay') continue; // FX is an overlay signal, not plotted
 
-    const { data: readings } = await sb
+    const { data: readings, error: readingsError } = await sb
       .from('signal_readings')
       .select('date,value,data_quality')
       .eq('source_id', s.id)
+      .gte('date', fetchStartIso(rangeDays, s))
       .in('data_quality', ['live', 'manual', 'synthetic_seed'])
-      .order('date', { ascending: true });
+      .order('date', { ascending: true })
+      .limit(3000);
+    if (readingsError) {
+      console.error(`trends: ${s.slug}: ${readingsError.message}`);
+      continue;
+    }
     if (!readings || readings.length < 2) continue;
     const hasSyntheticHistory = readings.some((r) => r.data_quality === 'synthetic_seed');
 
